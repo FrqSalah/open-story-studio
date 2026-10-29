@@ -94,7 +94,7 @@ public sealed class SafDeviceStorage : IDeviceStorage
         // Roots of the provider expose the available bytes; the capacity is not always reported.
         var authority = _tree.Authority;
         if (authority is null) return null;
-        using var cursor = _resolver.Query(DocumentsContract.BuildRootsUri(authority), [DocumentsContract.Root.ColumnRootId, DocumentsContract.Root.ColumnAvailableBytes, "capacity_bytes"], null, null, null);
+        using var cursor = _resolver.Query(DocumentsContract.BuildRootsUri(authority)!, [DocumentsContract.Root.ColumnRootId, DocumentsContract.Root.ColumnAvailableBytes, "capacity_bytes"], null, null, null);
         var rootId = _rootId.Split(':')[0];
         while (cursor?.MoveToNext() == true)
         {

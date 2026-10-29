@@ -79,7 +79,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "$env:GITHUB_REF_NAME".TrimStart('v')
-          dotnet publish src/Studio.App/Studio.App.csproj -f net10.0-windows10.0.19041.0 -c Release -r win-x64 --self-contained -p:WindowsAppSDKSelfContained=true -p:WindowsPackageType=None -p:Version=$version -o out
+          dotnet publish src/Studio.App/Studio.App.csproj -f net10.0-windows10.0.19041.0 -c Release -p:RuntimeIdentifierOverride=win-x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true -p:WindowsPackageType=None -p:Version=$version -o out
           Compress-Archive -Path out/* -DestinationPath "open-story-studio-windows-x64-$version.zip"
       - uses: actions/upload-artifact@v4
         with:
