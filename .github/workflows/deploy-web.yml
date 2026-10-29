@@ -48,4 +48,5 @@ jobs:
           echo "url=$(jq -r '.url' deploy.json)" >> "$GITHUB_OUTPUT"
       - name: Netlify not configured
         if: env.NETLIFY_AUTH_TOKEN == '' || env.NETLIFY_SITE_ID == ''
-        run: echo "::warning::Secrets NETLIFY_AUTH_TOKEN / NETLIFY_SITE_ID absents : le site a été construit (artefact 'web') mais pas déployé. Voir README, section Déploiement."
+        run: |
+          echo "::warning::Secrets NETLIFY_AUTH_TOKEN et NETLIFY_SITE_ID absents, site construit (artefact web) mais non déployé. Voir le README."
