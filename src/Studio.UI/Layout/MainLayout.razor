@@ -1,0 +1,33 @@
+@inherits LayoutComponentBase
+@inject IDeviceService Device
+
+<div class="shell">
+    <header class="topbar">
+        <a class="brand" href="">
+            <span class="brand-mark" aria-hidden="true">◐</span>
+            <span>Open Story Studio</span>
+        </a>
+        <nav class="nav">
+            <NavLink href="" Match="NavLinkMatch.All">Bibliothèque</NavLink>
+            <NavLink href="device">Appareil @(Device.IsConnected ? "●" : "")</NavLink>
+            <NavLink href="about">À propos</NavLink>
+        </nav>
+    </header>
+    <main class="content">
+        <ErrorBoundary @ref="_boundary">
+            <ChildContent>@Body</ChildContent>
+            <ErrorContent Context="error">
+                <div class="alert alert-error" role="alert">
+                    <strong>Une erreur est survenue :</strong> @error.Message
+                    <button class="btn" @onclick="Recover">Continuer</button>
+                </div>
+            </ErrorContent>
+        </ErrorBoundary>
+    </main>
+</div>
+
+@code {
+    private ErrorBoundary? _boundary;
+
+    private void Recover() => _boundary?.Recover();
+}

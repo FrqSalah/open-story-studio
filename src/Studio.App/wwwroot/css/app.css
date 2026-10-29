@@ -1,0 +1,6 @@
+/* App-only tweaks: respect the Android status bar / notch. */
+.status-bar-safe-area { display: none; }
+@supports (-webkit-touch-callout: none) {
+  .status-bar-safe-area { display: block; position: sticky; top: 0; height: env(safe-area-inset-top); background: var(--surface); z-index: 100; }
+}
+.topbar { padding-top: max(.6rem, env(safe-area-inset-top)); }

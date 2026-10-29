@@ -1,0 +1,51 @@
+name: Deploy web (Netlify)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/Studio.Core/**'
+      - 'src/Studio.Formats/**'
+      - 'src/Studio.UI/**'
+      - 'src/Studio.Web/**'
+      - 'Directory.*.props'
+      - 'global.json'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Publish Blazor WebAssembly
+        run: dotnet publish src/Studio.Web/Studio.Web.csproj -c Release -o artifacts/web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: artifacts/web/wwwroot
+      - name: Deploy to Netlify
+        id: deploy
+        if: env.NETLIFY_AUTH_TOKEN != '' && env.NETLIFY_SITE_ID != ''
+        run: |
+          npx --yes netlify-cli@27 deploy --dir artifacts/web/wwwroot --prod --message "${{ github.sha }}" --json > deploy.json
+          echo "url=$(jq -r '.url' deploy.json)" >> "$GITHUB_OUTPUT"
+      - name: Netlify not configured
+        if: env.NETLIFY_AUTH_TOKEN == '' || env.NETLIFY_SITE_ID == ''
+        run: echo "::warning::Secrets NETLIFY_AUTH_TOKEN / NETLIFY_SITE_ID absents : le site a été construit (artefact 'web') mais pas déployé. Voir README, section Déploiement."

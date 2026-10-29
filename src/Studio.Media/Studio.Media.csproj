@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(StudioTargetFramework)</TargetFramework>
+    <Description>Image and audio conversion to the formats expected by story teller devices.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Condition="$([MSBuild]::IsOSPlatform('linux'))" />
+    <ProjectReference Include="..\Studio.Formats\Studio.Formats.csproj" />
+    <InternalsVisibleTo Include="Studio.Tests" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(StudioTargetFramework)</TargetFramework>
+    <AssemblyName>studio</AssemblyName>
+    <Description>Command line tool to inspect devices and manage story packs.</Description>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <NoWarn>$(NoWarn);CA1031;CA2007</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+    <ProjectReference Include="..\Studio.Device\Studio.Device.csproj" />
+  </ItemGroup>
+</Project>

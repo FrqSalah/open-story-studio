@@ -1,0 +1,53 @@
+@* Picks the action node and option targeted by a transition. *@
+
+<h3>@Label</h3>
+<div class="form-row">
+    <select @onchange="OnActionChanged" aria-label="@Label">
+        <option value="" selected="@(Value is null)">@EmptyLabel</option>
+        @foreach (var action in Pack.ActionNodes)
+        {
+            <option value="@action.Id" selected="@(Value?.Action == action)">@action.Name (@action.Options.Count)</option>
+        }
+    </select>
+</div>
+@if (Value is { Action.Options.Count: > 1 } t)
+{
+    <div class="form-row">
+        <label>Option sélectionnée en arrivant</label>
+        <select @onchange="OnOptionChanged">
+            @for (var i = 0; i < t.Action.Options.Count; i++)
+            {
+                var index = i;
+                <option value="@index" selected="@(t.OptionIndex == index)">@(index + 1). @t.Action.Options[index].Name</option>
+            }
+        </select>
+    </div>
+}
+
+@code {
+    /// <summary>Section title.</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+
+    /// <summary>Text of the "no transition" choice.</summary>
+    [Parameter] public string EmptyLabel { get; set; } = "Aucune";
+
+    /// <summary>Pack (to list action nodes).</summary>
+    [Parameter, EditorRequired] public StoryPack Pack { get; set; } = default!;
+
+    /// <summary>Current transition.</summary>
+    [Parameter] public Transition? Value { get; set; }
+
+    /// <summary>Raised with the new transition.</summary>
+    [Parameter] public EventCallback<Transition?> ValueChanged { get; set; }
+
+    private Task OnActionChanged(ChangeEventArgs e)
+    {
+        var action = Pack.FindAction(e.Value?.ToString() ?? string.Empty);
+        return ValueChanged.InvokeAsync(action is null ? null : new Transition(action, 0));
+    }
+
+    private Task OnOptionChanged(ChangeEventArgs e) =>
+        Value is null || !int.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var index)
+            ? Task.CompletedTask
+            : ValueChanged.InvokeAsync(Value with { OptionIndex = index });
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Open Story Studio",
+  "short_name": "Story Studio",
+  "id": "./",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f7fb",
+  "theme_color": "#2b6cb0",
+  "lang": "fr",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

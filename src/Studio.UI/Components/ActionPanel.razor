@@ -1,0 +1,85 @@
+@* Properties of the selected action node (choice list). *@
+
+<div class="panel">
+    <h2>Choix</h2>
+    <p class="muted">La molette fait défiler ces options ; OK suit la transition de l'option affichée.</p>
+
+    <div class="form-row">
+        <label for="action-name">Nom</label>
+        <input id="action-name" value="@Action.Name" @onchange="e => Session.Edit(_ => Action.Name = e.Value?.ToString() ?? string.Empty)" />
+    </div>
+
+    <h3>Options (ordre de la molette)</h3>
+    @if (Action.Options.Count == 0)
+    {
+        <p class="muted">Aucune option.</p>
+    }
+    <ol class="option-list">
+        @for (var i = 0; i < Action.Options.Count; i++)
+        {
+            var index = i;
+            var option = Action.Options[index];
+            <li @key="option">
+                <button class="link" @onclick="() => Session.Select(option)">@option.Name</button>
+                <span class="actions">
+                    <button class="btn btn-icon" title="Monter" disabled="@(index == 0)" @onclick="() => Move(index, -1)">↑</button>
+                    <button class="btn btn-icon" title="Descendre" disabled="@(index == Action.Options.Count - 1)" @onclick="() => Move(index, 1)">↓</button>
+                    <button class="btn btn-icon" title="Retirer" @onclick="() => Session.Edit(_ => Action.Options.RemoveAt(index))">✕</button>
+                </span>
+            </li>
+        }
+    </ol>
+
+    <div class="form-row">
+        <label for="add-option">Ajouter une option</label>
+        <select id="add-option" @onchange="Add">
+            <option value="">— choisir une étape —</option>
+            @foreach (var stage in Pack.StageNodes.Where(s => !Action.Options.Contains(s)))
+            {
+                <option value="@stage.Id">@stage.Name</option>
+            }
+        </select>
+    </div>
+    <div class="actions">
+        <button class="btn btn-small" @onclick="AddNew">+ Nouvelle étape comme option</button>
+        <button class="btn btn-small btn-danger" @onclick="Delete">Supprimer le choix</button>
+    </div>
+</div>
+
+@code {
+    /// <summary>Pack being edited.</summary>
+    [Parameter, EditorRequired] public StoryPack Pack { get; set; } = default!;
+
+    /// <summary>Selected action node.</summary>
+    [Parameter, EditorRequired] public ActionNode Action { get; set; } = default!;
+
+    /// <summary>Editing session.</summary>
+    [Parameter, EditorRequired] public EditorSession Session { get; set; } = default!;
+
+    private void Move(int index, int delta) => Session.Edit(_ =>
+    {
+        var item = Action.Options[index];
+        Action.Options.RemoveAt(index);
+        Action.Options.Insert(index + delta, item);
+    });
+
+    private void Add(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var id) || Pack.FindStage(id) is not { } stage) return;
+        Session.Edit(_ => Action.Options.Add(stage));
+    }
+
+    private void AddNew() => Session.Edit(p =>
+    {
+        var pos = Action.Position ?? new NodePosition(0, 0);
+        var stage = new StageNode { Name = $"Option {Action.Options.Count + 1}", Controls = ControlSettings.Menu, Position = new(pos.X + 240, pos.Y + Action.Options.Count * 90) };
+        p.StageNodes.Add(stage);
+        Action.Options.Add(stage);
+    });
+
+    private void Delete()
+    {
+        Session.Edit(p => p.RemoveAction(Action));
+        Session.ClearSelection();
+    }
+}

@@ -1,0 +1,139 @@
+@page "/simulate/{Id:guid}"
+@implements IDisposable
+@inject IPackLibrary Library
+@inject StudioJs Js
+
+<PageTitle>Simulateur — Open Story Studio</PageTitle>
+
+@if (_notFound)
+{
+    <h1>Pack introuvable</h1>
+    <p><a href="">Retour à la bibliothèque</a></p>
+}
+else if (_player is { } player)
+{
+    <div class="page-header">
+        <h1>@_title</h1>
+        <div class="actions">
+            <a class="btn" href="edit/@Id">Éditer</a>
+            <button class="btn" @onclick="Restart">↺ Recommencer</button>
+        </div>
+    </div>
+
+    <div class="simulator" tabindex="0" @onkeydown="OnKey" @onkeydown:preventDefault="true">
+        <div class="device">
+            <div class="device-screen @(player.IsPaused ? "paused" : "")">
+                @if (player.HasExited)
+                {
+                    <div class="screen-message">Retour à la liste des packs</div>
+                }
+                else if (player.Current.Image is { } image)
+                {
+                    <img src="@image.ToDataUrl()" alt="@player.Current.Name" />
+                }
+                else
+                {
+                    <div class="screen-message">@player.Current.Name</div>
+                }
+                @if (player.IsPaused)
+                {
+                    <div class="pause-badge">❚❚</div>
+                }
+            </div>
+            <div class="device-controls">
+                <button class="dev-btn" title="Molette gauche (←)" disabled="@(!player.Current.Controls.Wheel)" @onclick="() => Press(DeviceButton.WheelLeft)">◀</button>
+                <button class="dev-btn dev-ok" title="OK (Entrée)" @onclick="() => Press(DeviceButton.Ok)">OK</button>
+                <button class="dev-btn" title="Molette droite (→)" disabled="@(!player.Current.Controls.Wheel)" @onclick="() => Press(DeviceButton.WheelRight)">▶</button>
+            </div>
+            <div class="device-controls">
+                <button class="dev-btn dev-small" title="Accueil (Échap)" disabled="@(!player.Current.Controls.Home)" @onclick="() => Press(DeviceButton.Home)">⌂</button>
+                <button class="dev-btn dev-small" title="Pause (Espace)" disabled="@(!player.Current.Controls.Pause)" @onclick="() => Press(DeviceButton.Pause)">❚❚</button>
+            </div>
+            @if (player.Current.Audio is { } audio && !player.HasExited)
+            {
+                <audio id="@_audioId" src="@audio.ToDataUrl()" autoplay @onended="OnEnded" @key="player.Current"></audio>
+            }
+        </div>
+        <div class="sim-info card">
+            <h2>@player.Current.Name</h2>
+            <p class="muted">
+                @if (player.CurrentAction is { } action)
+                {
+                    <span>Choix « @action.Name » : option @(player.CurrentOptionIndex + 1) / @action.Options.Count</span>
+                }
+                else
+                {
+                    <span>Couverture du pack</span>
+                }
+            </p>
+            <p class="muted">Clavier : ← → molette · Entrée OK · Échap Accueil · Espace pause.</p>
+            @if (player.Current.Audio is null)
+            {
+                <p class="muted">Cette étape n'a pas de son@(player.Current.Controls.Autoplay ? " : la suite s'enchaîne immédiatement sur l'appareil." : ".")</p>
+                @if (player.Current.Controls.Autoplay)
+                {
+                    <button class="btn btn-small" @onclick="OnEnded">Passer à la suite</button>
+                }
+            }
+        </div>
+    </div>
+}
+else
+{
+    <p class="muted">Chargement…</p>
+}
+
+@code {
+    private readonly string _audioId = "sim-audio-" + Guid.NewGuid().ToString("N");
+    private StoryPlayer? _player;
+    private string _title = string.Empty;
+    private bool _notFound;
+
+    /// <summary>Pack id.</summary>
+    [Parameter] public Guid Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var pack = await Library.LoadAsync(Id);
+        if (pack is null || pack.SquareOne is null)
+        {
+            _notFound = true;
+            return;
+        }
+        _title = pack.Title;
+        if (_player is not null) _player.StageChanged -= OnStageChanged;
+        _player = new StoryPlayer(pack);
+        _player.StageChanged += OnStageChanged;
+    }
+
+    private void OnStageChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private async Task Press(DeviceButton button)
+    {
+        if (_player is null) return;
+        _player.Press(button);
+        if (button == DeviceButton.Pause || (button == DeviceButton.Ok && _player.Current.Controls is { Ok: false, Pause: true }))
+        {
+            await Js.SetPausedAsync(_audioId, _player.IsPaused);
+        }
+    }
+
+    private void OnEnded() => _player?.AudioEnded();
+
+    private void Restart() => _player?.Reset();
+
+    private Task OnKey(KeyboardEventArgs e) => e.Key switch
+    {
+        "ArrowLeft" => Press(DeviceButton.WheelLeft),
+        "ArrowRight" => Press(DeviceButton.WheelRight),
+        "Enter" => Press(DeviceButton.Ok),
+        "Escape" or "Home" => Press(DeviceButton.Home),
+        " " => Press(DeviceButton.Pause),
+        _ => Task.CompletedTask,
+    };
+
+    public void Dispose()
+    {
+        if (_player is not null) _player.StageChanged -= OnStageChanged;
+    }
+}

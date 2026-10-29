@@ -1,0 +1,166 @@
+@* Properties of the selected stage node. *@
+@inject StudioJs Js
+
+<div class="panel">
+    <h2>@(Stage == Pack.SquareOne ? "★ Couverture" : "Étape")</h2>
+
+    <div class="form-row">
+        <label for="stage-name">Nom</label>
+        <input id="stage-name" value="@Stage.Name" @onchange="e => Session.Edit(_ => Stage.Name = e.Value?.ToString() ?? string.Empty)" />
+    </div>
+
+    <h3>Image <span class="muted">(320×240, convertie automatiquement)</span></h3>
+    @if (Stage.Image is { } image)
+    {
+        <img class="screen-preview" src="@image.ToDataUrl()" alt="Image de l'étape" />
+    }
+    <div class="actions">
+        <label class="btn btn-small">
+            @(Stage.Image is null ? "Choisir une image" : "Remplacer")
+            <InputFile accept="image/*" class="visually-hidden" OnChange="e => LoadAsync(e, MediaKind.Image)" />
+        </label>
+        @if (Stage.Image is not null)
+        {
+            <button class="btn btn-small" @onclick="() => Session.Edit(_ => Stage.Image = null)">Retirer</button>
+        }
+    </div>
+
+    <h3>Son</h3>
+    @if (Stage.Audio is { } audio)
+    {
+        <audio controls src="@audio.ToDataUrl()" class="audio-preview"></audio>
+    }
+    <div class="actions">
+        <label class="btn btn-small">
+            @(Stage.Audio is null ? "Choisir un son" : "Remplacer")
+            <InputFile accept="audio/*,.mp3,.ogg,.wav" class="visually-hidden" OnChange="e => LoadAsync(e, MediaKind.Audio)" />
+        </label>
+        @if (_recording)
+        {
+            <button class="btn btn-small btn-danger" @onclick="StopRecordingAsync">■ Arrêter l'enregistrement</button>
+        }
+        else
+        {
+            <button class="btn btn-small" @onclick="StartRecordingAsync">● Enregistrer</button>
+        }
+        @if (Stage.Audio is not null)
+        {
+            <button class="btn btn-small" @onclick="() => Session.Edit(_ => Stage.Audio = null)">Retirer</button>
+        }
+    </div>
+    @if (_mediaError is not null)
+    {
+        <p class="error-text">@_mediaError</p>
+    }
+
+    <h3>Commandes</h3>
+    <div class="checks">
+        <label><input type="checkbox" checked="@Stage.Controls.Wheel" @onchange="e => SetControls(c => c with { Wheel = Checked(e) })" /> Molette (choisir)</label>
+        <label><input type="checkbox" checked="@Stage.Controls.Ok" @onchange="e => SetControls(c => c with { Ok = Checked(e) })" /> Bouton OK</label>
+        <label><input type="checkbox" checked="@Stage.Controls.Home" @onchange="e => SetControls(c => c with { Home = Checked(e) })" /> Bouton Accueil</label>
+        <label><input type="checkbox" checked="@Stage.Controls.Pause" @onchange="e => SetControls(c => c with { Pause = Checked(e) })" /> Pause</label>
+        <label><input type="checkbox" checked="@Stage.Controls.Autoplay" @onchange="e => SetControls(c => c with { Autoplay = Checked(e) })" /> Enchaîner à la fin du son</label>
+    </div>
+    <div class="actions">
+        <button class="btn btn-small" @onclick="() => SetControls(_ => ControlSettings.Menu)">Préréglage menu</button>
+        <button class="btn btn-small" @onclick="() => SetControls(_ => ControlSettings.Story)">Préréglage histoire</button>
+    </div>
+
+    <TransitionEditor Label="Suite (OK / fin du son)" Pack="Pack" Value="Stage.OkTransition"
+                      ValueChanged="t => Session.Edit(_ => Stage.OkTransition = t)" />
+    <TransitionEditor Label="Bouton Accueil" Pack="Pack" Value="Stage.HomeTransition"
+                      ValueChanged="t => Session.Edit(_ => Stage.HomeTransition = t)"
+                      EmptyLabel="Retour à la liste des packs" />
+
+    <h3>Actions</h3>
+    <div class="actions">
+        <button class="btn btn-small" @onclick="AddNext" title="Crée un choix et une nouvelle étape reliés à celle-ci">+ Étape suivante</button>
+        @if (Stage != Pack.SquareOne)
+        {
+            <button class="btn btn-small" @onclick="() => Session.Edit(p => p.SetSquareOne(Stage))">Définir comme couverture</button>
+            <button class="btn btn-small btn-danger" @onclick="Delete">Supprimer l'étape</button>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _recording;
+    private string? _mediaError;
+
+    /// <summary>Pack being edited.</summary>
+    [Parameter, EditorRequired] public StoryPack Pack { get; set; } = default!;
+
+    /// <summary>Selected stage.</summary>
+    [Parameter, EditorRequired] public StageNode Stage { get; set; } = default!;
+
+    /// <summary>Editing session.</summary>
+    [Parameter, EditorRequired] public EditorSession Session { get; set; } = default!;
+
+    private static bool Checked(ChangeEventArgs e) => e.Value is true or "true" or "on";
+
+    private void SetControls(Func<ControlSettings, ControlSettings> change) => Session.Edit(_ => Stage.Controls = change(Stage.Controls));
+
+    private async Task LoadAsync(InputFileChangeEventArgs e, MediaKind kind)
+    {
+        _mediaError = null;
+        var max = kind == MediaKind.Image ? 30L * 1024 * 1024 : 300L * 1024 * 1024;
+        if (e.File.Size > max)
+        {
+            _mediaError = "Fichier trop volumineux.";
+            return;
+        }
+        await using var stream = e.File.OpenReadStream(max);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        var asset = new MediaAsset(ms.ToArray(), fileName: e.File.Name);
+        if (asset.Kind != kind)
+        {
+            _mediaError = kind == MediaKind.Image ? "Ce fichier n'est pas une image reconnue." : "Ce fichier n'est pas un son reconnu.";
+            return;
+        }
+        Session.Edit(_ =>
+        {
+            if (kind == MediaKind.Image) Stage.Image = asset;
+            else Stage.Audio = asset;
+        });
+    }
+
+    private async Task StartRecordingAsync()
+    {
+        _mediaError = null;
+        _recording = await Js.StartRecordingAsync();
+        if (!_recording) _mediaError = "Micro indisponible ou accès refusé.";
+    }
+
+    private async Task StopRecordingAsync()
+    {
+        _recording = false;
+        var wav = await Js.StopRecordingAsync();
+        if (wav is { Length: > 44 })
+        {
+            Session.Edit(_ => Stage.Audio = new MediaAsset(wav, MediaTypes.Wav, $"enregistrement-{DateTime.Now:HHmmss}.wav"));
+        }
+    }
+
+    private void AddNext()
+    {
+        StageNode? created = null;
+        Session.Edit(p =>
+        {
+            var basePos = Stage.Position ?? new NodePosition(0, 0);
+            var action = new ActionNode { Name = $"Vers {Stage.Name}…", Position = new(basePos.X + 240, basePos.Y) };
+            created = new StageNode { Name = "Nouvelle étape", Controls = ControlSettings.Story, Position = new(basePos.X + 480, basePos.Y) };
+            action.Options.Add(created);
+            p.ActionNodes.Add(action);
+            p.StageNodes.Add(created);
+            Stage.OkTransition = new Transition(action, 0);
+        });
+        if (created is not null) Session.Select(created);
+    }
+
+    private void Delete()
+    {
+        Session.Edit(p => p.RemoveStage(Stage));
+        Session.ClearSelection();
+    }
+}

@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  cli:
+    name: CLI ${{ matrix.rid }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [win-x64, linux-x64, osx-arm64]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Publish
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          dotnet publish src/Studio.Cli/Studio.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained -p:PublishSingleFile=true -p:Version="$VERSION" -o out
+          (cd out && zip -r "../studio-cli-${{ matrix.rid }}.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.rid }}
+          path: studio-cli-${{ matrix.rid }}.zip
+
+  android:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: microsoft
+          java-version: '21'
+      - run: dotnet workload install maui-android
+      - run: dotnet build src/Studio.App/Studio.App.csproj -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
+      - name: Decode signing key
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+      - name: Publish APK
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SIGNING=""
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            SIGNING="-p:AndroidKeyStore=true -p:AndroidSigningKeyStore=$RUNNER_TEMP/release.keystore -p:AndroidSigningKeyAlias=$ANDROID_KEY_ALIAS -p:AndroidSigningKeyPass=env:ANDROID_KEYSTORE_PASSWORD -p:AndroidSigningStorePass=env:ANDROID_KEYSTORE_PASSWORD"
+          fi
+          dotnet publish src/Studio.App/Studio.App.csproj -f net10.0-android -c Release -p:AndroidSdkDirectory="$ANDROID_HOME" -p:Version="$VERSION" -p:ApplicationVersion=${{ github.run_number }} $SIGNING -o out
+          cp out/*-Signed.apk "open-story-studio-$VERSION.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: open-story-studio-*.apk
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - run: dotnet workload install maui-windows
+      - name: Publish
+        shell: pwsh
+        run: |
+          $version = "$env:GITHUB_REF_NAME".TrimStart('v')
+          dotnet publish src/Studio.App/Studio.App.csproj -f net10.0-windows10.0.19041.0 -c Release -r win-x64 --self-contained -p:WindowsAppSDKSelfContained=true -p:WindowsPackageType=None -p:Version=$version -o out
+          Compress-Archive -Path out/* -DestinationPath "open-story-studio-windows-x64-$version.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: open-story-studio-windows-x64-*.zip
+
+  publish:
+    needs: [cli, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "Open Story Studio $GITHUB_REF_NAME" --generate-notes --verify-tag

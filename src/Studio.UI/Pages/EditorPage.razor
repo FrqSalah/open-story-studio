@@ -1,0 +1,186 @@
+@page "/edit/{Id:guid}"
+@implements IDisposable
+@inject IPackLibrary Library
+@inject EditorSession Session
+@inject NavigationManager Nav
+
+<PageTitle>@(Session.Pack?.Title ?? "Éditeur") — Open Story Studio</PageTitle>
+
+@if (_notFound)
+{
+    <h1>Pack introuvable</h1>
+    <p><a href="">Retour à la bibliothèque</a></p>
+}
+else if (Session.Pack is { } pack)
+{
+    <div class="page-header editor-header">
+        <div class="title-edit">
+            <input class="title-input" aria-label="Titre du pack" value="@pack.Title"
+                   @onchange="e => Session.Edit(p => p.Title = e.Value?.ToString() ?? string.Empty)" />
+            @if (Session.IsDirty)
+            {
+                <span class="badge">non enregistré</span>
+            }
+        </div>
+        <div class="actions">
+            <button class="btn" disabled="@(!Session.CanUndo)" @onclick="Session.Undo" title="Annuler (Ctrl+Z)">↶</button>
+            <button class="btn" disabled="@(!Session.CanRedo)" @onclick="Session.Redo" title="Rétablir (Ctrl+Y)">↷</button>
+            <button class="btn" @onclick="AddStage">+ Étape</button>
+            <button class="btn" @onclick="AddAction">+ Choix</button>
+            <button class="btn" @onclick="SimulateAsync">▶ Simuler</button>
+            <button class="btn btn-primary" disabled="@(!Session.IsDirty)" @onclick="SaveAsync">Enregistrer</button>
+        </div>
+    </div>
+
+    <div class="editor" @onkeydown="OnKey" tabindex="-1">
+        <section class="editor-graph">
+            <PackGraph Pack="pack" Session="Session" />
+        </section>
+        <aside class="editor-side">
+            @if (Session.SelectedStage is { } stage)
+            {
+                <StagePanel Pack="pack" Stage="stage" Session="Session" @key="stage" />
+            }
+            else if (Session.SelectedAction is { } action)
+            {
+                <ActionPanel Pack="pack" Action="action" Session="Session" @key="action" />
+            }
+            else
+            {
+                <div class="panel">
+                    <h2>Pack</h2>
+                    <div class="form-row">
+                        <label for="desc">Description</label>
+                        <textarea id="desc" rows="3" @onchange="e => Session.Edit(p => p.Description = e.Value?.ToString())">@pack.Description</textarea>
+                    </div>
+                    <div class="checks">
+                        <label>
+                            <input type="checkbox" checked="@pack.NightModeAvailable" @onchange="e => Session.Edit(p => p.NightModeAvailable = e.Value is true)" />
+                            Compatible mode nuit
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label for="version">Version</label>
+                        <input id="version" type="number" min="1" max="32000" value="@pack.Version"
+                               @onchange="e => Session.Edit(p => p.Version = short.TryParse(e.Value?.ToString(), out var v) ? v : p.Version)" />
+                    </div>
+                    <p class="muted">Sélectionnez une étape (rectangle) ou un choix (pastille) pour le modifier.
+                        Glissez les éléments pour les déplacer, et le fond pour naviguer.</p>
+                </div>
+            }
+
+            <div class="panel">
+                <h2>Vérifications</h2>
+                @if (Session.Issues.Count == 0)
+                {
+                    <p class="ok-text">✓ Aucun problème détecté.</p>
+                }
+                else
+                {
+                    <ul class="issues">
+                        @foreach (var issue in Session.Issues)
+                        {
+                            <li class="@(issue.Severity == IssueSeverity.Error ? "issue-error" : "issue-warning")">
+                                @if (issue.NodeId is not null)
+                                {
+                                    <button class="link" @onclick="() => SelectNode(issue.NodeId)">@issue.Message</button>
+                                }
+                                else
+                                {
+                                    @issue.Message
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </aside>
+    </div>
+}
+else
+{
+    <p class="muted">Chargement…</p>
+}
+
+@code {
+    private bool _notFound;
+
+    /// <summary>Pack id.</summary>
+    [Parameter] public Guid Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Session.Changed -= OnSessionChanged;
+        Session.Changed += OnSessionChanged;
+        if (Session.Pack?.Id == Id) return;
+        var pack = await Library.LoadAsync(Id);
+        if (pack is null)
+        {
+            _notFound = true;
+            return;
+        }
+        Session.Open(pack);
+    }
+
+    private void OnSessionChanged(object? sender, EventArgs e) => InvokeAsync(StateHasChanged);
+
+    private async Task SaveAsync()
+    {
+        if (Session.Pack is null) return;
+        var oldId = Id;
+        await Library.SaveAsync(Session.Pack);
+        // Changing square one changes the pack id: keep a single archive.
+        if (Session.Pack.Id != oldId)
+        {
+            await Library.DeleteAsync(oldId);
+            Nav.NavigateTo($"edit/{Session.Pack.Id}", replace: true);
+        }
+        Session.MarkSaved();
+    }
+
+    private async Task SimulateAsync()
+    {
+        if (Session.IsDirty) await SaveAsync();
+        Nav.NavigateTo($"simulate/{Session.Pack!.Id}");
+    }
+
+    private void AddStage()
+    {
+        var stage = new StageNode { Name = $"Étape {Session.Pack!.StageNodes.Count + 1}", Controls = ControlSettings.Story, Position = NextPosition() };
+        Session.Edit(p => p.StageNodes.Add(stage));
+        Session.Select(stage);
+    }
+
+    private void AddAction()
+    {
+        var action = new ActionNode { Name = $"Choix {Session.Pack!.ActionNodes.Count + 1}", Position = NextPosition() };
+        Session.Edit(p => p.ActionNodes.Add(action));
+        Session.Select(action);
+    }
+
+    private NodePosition NextPosition()
+    {
+        var pack = Session.Pack!;
+        var maxY = pack.StageNodes.Select(s => s.Position?.Y ?? 0).Concat(pack.ActionNodes.Select(a => a.Position?.Y ?? 0)).DefaultIfEmpty(0).Max();
+        return new NodePosition(0, maxY + 120);
+    }
+
+    private void SelectNode(string id)
+    {
+        if (Guid.TryParse(id, out var guid) && Session.Pack!.FindStage(guid) is { } stage) Session.Select(stage);
+        else if (Session.Pack!.FindAction(id) is { } action) Session.Select(action);
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (!e.CtrlKey && !e.MetaKey) return;
+        switch (e.Key.ToUpperInvariant())
+        {
+            case "Z": Session.Undo(); break;
+            case "Y": Session.Redo(); break;
+            case "S": await SaveAsync(); break;
+        }
+    }
+
+    public void Dispose() => Session.Changed -= OnSessionChanged;
+}

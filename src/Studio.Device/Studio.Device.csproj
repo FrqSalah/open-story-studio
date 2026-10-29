@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(StudioTargetFramework)</TargetFramework>
+    <Description>Device detection and transfer (mass storage v2/v3, raw USB v1) with backups and transactional writes.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="LibUsbDotNet" />
+    <ProjectReference Include="..\Studio.Formats\Studio.Formats.csproj" />
+    <ProjectReference Include="..\Studio.Media\Studio.Media.csproj" />
+    <InternalsVisibleTo Include="Studio.Tests" />
+  </ItemGroup>
+</Project>

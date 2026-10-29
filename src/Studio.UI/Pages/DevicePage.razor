@@ -1,0 +1,261 @@
+@page "/device"
+@inject IDeviceService Device
+@inject IPackLibrary Library
+@inject NavigationManager Nav
+
+<PageTitle>Appareil — Open Story Studio</PageTitle>
+
+<div class="page-header">
+    <h1>Appareil</h1>
+    @if (Device.IsSupported)
+    {
+        <div class="actions">
+            <button class="btn btn-primary" disabled="@_busy" @onclick="ConnectAsync">@(Device.IsConnected ? "Actualiser" : "Détecter l'appareil")</button>
+            <button class="btn" disabled="@_busy" @onclick="PickAsync">Choisir le dossier…</button>
+        </div>
+    }
+</div>
+
+@if (!Device.IsSupported)
+{
+    <div class="card prose">
+        <p>@Device.ConnectHint</p>
+        <p>Vous pouvez tout de même créer, éditer et simuler vos packs ici, puis les exporter (.zip) pour les transférer avec l'application.</p>
+    </div>
+}
+else
+{
+@if (_message is not null)
+{
+    <div class="alert @(_error ? "alert-error" : "alert-info")" role="status">@_message</div>
+}
+
+@if (_progress is { } progress)
+{
+    <div class="card">
+        <p>@progress.Phase…</p>
+        <progress max="1" value="@progress.Fraction.ToString(CultureInfo.InvariantCulture)"></progress>
+    </div>
+}
+
+@if (_info is null)
+{
+    <div class="card prose">
+        <p>@Device.ConnectHint</p>
+        <label class="checks">
+            <input type="checkbox" checked="@Device.AllowExperimentalWrites" @onchange="e => Device.AllowExperimentalWrites = e.Value is true" />
+            Autoriser l'écriture expérimentale (appareils v1 et v3, non validée sur du vrai matériel)
+        </label>
+    </div>
+}
+else
+{
+    <div class="card device-info">
+        <dl>
+            <dt>Génération</dt><dd>@_info.Generation</dd>
+            <dt>Firmware</dt><dd>@_info.Firmware</dd>
+            <dt>N° de série</dt><dd>@(_info.SerialNumber ?? "inconnu")</dd>
+            <dt>Emplacement</dt><dd>@_info.Location</dd>
+            @if (_info.TotalBytes is { } total)
+            {
+                <dt>Espace</dt>
+                <dd>
+                    @LibraryPage.Size(_info.FreeBytes ?? 0) libres sur @LibraryPage.Size(total)
+                    <progress max="@total" value="@(total - (_info.FreeBytes ?? 0))"></progress>
+                </dd>
+            }
+        </dl>
+        @if (!_info.IsWriteSupported)
+        {
+            <p class="warning-text">
+                L'écriture est désactivée pour ce firmware.
+                <label><input type="checkbox" checked="@Device.AllowExperimentalWrites" @onchange="ToggleExperimentalAsync" /> Activer l'écriture expérimentale</label>
+            </p>
+        }
+        <div class="actions">
+            <button class="btn btn-small" disabled="@_busy" @onclick="BackupAsync">Sauvegarder l'index</button>
+        </div>
+    </div>
+
+    <div class="two-columns">
+        <section class="card">
+            <h2>Sur l'appareil (@_packs.Count)</h2>
+            @if (_packs.Count == 0)
+            {
+                <p class="muted">Aucun pack.</p>
+            }
+            <ol class="device-packs">
+                @for (var i = 0; i < _packs.Count; i++)
+                {
+                    var index = i;
+                    var pack = _packs[index];
+                    <li @key="pack.Id" class="@(pack.IsValid ? "" : "invalid")">
+                        <div>
+                            <strong>@TitleOf(pack.Id)</strong>
+                            <span class="muted">v@(pack.Version) · @LibraryPage.Size(pack.SizeBytes)@(pack.NightMode ? " · nuit" : "")@(pack.IsValid ? "" : " · dossier manquant")</span>
+                        </div>
+                        <span class="actions">
+                            <button class="btn btn-icon" title="Monter" disabled="@(_busy || index == 0)" @onclick="() => MoveAsync(index, -1)">↑</button>
+                            <button class="btn btn-icon" title="Descendre" disabled="@(_busy || index == _packs.Count - 1)" @onclick="() => MoveAsync(index, 1)">↓</button>
+                            <button class="btn btn-small" title="Copier dans la bibliothèque" disabled="@_busy" @onclick="() => ImportAsync(pack.Id)">→ Bibliothèque</button>
+                            @if (_confirmRemove == pack.Id)
+                            {
+                                <button class="btn btn-small btn-danger" disabled="@_busy" @onclick="() => RemoveAsync(pack.Id)">Confirmer</button>
+                                <button class="btn btn-small" @onclick="() => _confirmRemove = null">Annuler</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-small btn-danger" disabled="@_busy" @onclick="() => _confirmRemove = pack.Id">Supprimer</button>
+                            }
+                        </span>
+                    </li>
+                }
+            </ol>
+        </section>
+
+        <section class="card">
+            <h2>Envoyer depuis la bibliothèque</h2>
+            @if (_library.Count == 0)
+            {
+                <p class="muted">La bibliothèque est vide.</p>
+            }
+            <ul class="library-picks">
+                @foreach (var entry in _library)
+                {
+                    var installed = _packs.Any(p => p.Id == entry.Id);
+                    <li @key="entry.Id">
+                        <span>@entry.Title</span>
+                        <button class="btn btn-small btn-primary" disabled="@_busy" @onclick="() => InstallAsync(entry.Id)">@(installed ? "Mettre à jour" : "Envoyer")</button>
+                    </li>
+                }
+            </ul>
+        </section>
+    </div>
+}
+}
+
+@code {
+    private DeviceSummary? _info;
+    private List<DevicePack> _packs = [];
+    private IReadOnlyList<LibraryEntry> _library = [];
+    private (string Phase, double Fraction)? _progress;
+    private Guid? _confirmRemove;
+    private string? _message;
+    private bool _error;
+    private bool _busy;
+
+    /// <summary>Pack to install right after connecting (from the library page).</summary>
+    [SupplyParameterFromQuery(Name = "install")] public Guid? InstallId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Device.IsSupported) return;
+        _library = await Library.ListAsync();
+        await ConnectAsync();
+        if (_info is not null && InstallId is { } id)
+        {
+            Nav.NavigateTo("device", replace: true);
+            await InstallAsync(id);
+        }
+    }
+
+    private Task ConnectAsync() => RunAsync(async () =>
+    {
+        _info = await Device.ConnectAsync();
+        if (_info is null)
+        {
+            Show("Aucun appareil détecté. Branchez-le et allumez-le, ou choisissez son dossier.", error: true);
+            return;
+        }
+        await RefreshAsync();
+    });
+
+    private Task PickAsync() => RunAsync(async () =>
+    {
+        _info = await Device.PickAndConnectAsync();
+        if (_info is null) Show("Ce dossier n'est pas un appareil reconnu (fichier .md absent).", error: true);
+        else await RefreshAsync();
+    });
+
+    private async Task ToggleExperimentalAsync(ChangeEventArgs e)
+    {
+        Device.AllowExperimentalWrites = e.Value is true;
+        await ConnectAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _packs = (await Device.ListPacksAsync()).ToList();
+        _library = await Library.ListAsync();
+    }
+
+    private Task InstallAsync(Guid id) => RunAsync(async () =>
+    {
+        var pack = await Library.LoadAsync(id) ?? throw new InvalidOperationException("Pack introuvable dans la bibliothèque.");
+        var progress = new Progress<(string Phase, double Fraction)>(p =>
+        {
+            _progress = p;
+            StateHasChanged();
+        });
+        await Device.InstallAsync(pack, progress);
+        _progress = null;
+        await RefreshAsync();
+        _info = await Device.ConnectAsync();
+        Show($"« {pack.Title} » est sur l'appareil.");
+    });
+
+    private Task RemoveAsync(Guid id) => RunAsync(async () =>
+    {
+        _confirmRemove = null;
+        await Device.RemoveAsync(id);
+        await RefreshAsync();
+        Show("Pack supprimé de l'appareil (l'index a été sauvegardé avant).");
+    });
+
+    private Task MoveAsync(int index, int delta) => RunAsync(async () =>
+    {
+        var order = _packs.Select(p => p.Id).ToList();
+        (order[index], order[index + delta]) = (order[index + delta], order[index]);
+        await Device.ReorderAsync(order);
+        await RefreshAsync();
+    });
+
+    private Task ImportAsync(Guid id) => RunAsync(async () =>
+    {
+        var pack = await Device.ExportAsync(id);
+        var existing = _library.FirstOrDefault(e => e.Id == id);
+        if (existing is not null) pack.Title = existing.Title;
+        await Library.SaveAsync(pack);
+        _library = await Library.ListAsync();
+        Show($"« {pack.Title} » copié dans la bibliothèque.");
+    });
+
+    private Task BackupAsync() => RunAsync(async () => Show($"Index sauvegardé dans {await Device.BackupAsync()}"));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            _progress = null;
+            Show(e.Message, error: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string TitleOf(Guid id) => _library.FirstOrDefault(e => e.Id == id)?.Title ?? $"Pack {id.ToString()[..8]}";
+
+    private void Show(string message, bool error = false)
+    {
+        _message = message;
+        _error = error;
+    }
+}

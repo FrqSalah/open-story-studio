@@ -1,0 +1,25 @@
+<Project>
+  <PropertyGroup>
+    <!-- Single place to retarget every library project. -->
+    <StudioTargetFramework>net10.0</StudioTargetFramework>
+
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors Condition="'$(Configuration)' == 'Release'">true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Missing XML docs are not errors; public API is documented where it matters. -->
+    <NoWarn>$(NoWarn);CS1591;CA1515;CA1861</NoWarn>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <Product>Open Story Studio</Product>
+    <Authors>Open Story Studio contributors</Authors>
+    <Copyright>Open Story Studio contributors. Based on STUdio by Marian Muller.</Copyright>
+    <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/FrqSalah/open-story-studio</RepositoryUrl>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Story tellers: firmware v1 (raw USB) and v2/v3 (mass storage). -->
+<resources>
+    <usb-device vendor-id="3141" product-id="26656" />
+    <usb-device vendor-id="3141" product-id="26688" />
+    <usb-device vendor-id="1155" product-id="41793" />
+</resources>

@@ -1,0 +1,190 @@
+@page "/"
+@implements IDisposable
+@inject IPackLibrary Library
+@inject IFileSaver Files
+@inject IDeviceService Device
+@inject NavigationManager Nav
+
+<PageTitle>Bibliothèque — Open Story Studio</PageTitle>
+
+<div class="page-header">
+    <h1>Bibliothèque</h1>
+    <div class="actions">
+        <button class="btn btn-primary" @onclick="() => _showNew = true">+ Nouveau pack</button>
+        <label class="btn">
+            Importer (.zip)
+            <InputFile OnChange="ImportAsync" accept=".zip" class="visually-hidden" multiple />
+        </label>
+    </div>
+</div>
+
+@if (_message is not null)
+{
+    <div class="alert @(_error ? "alert-error" : "alert-info")" role="status">@_message</div>
+}
+
+@if (_showNew)
+{
+    <div class="card new-pack">
+        <h2>Nouveau pack</h2>
+        <div class="form-row">
+            <label for="title">Titre</label>
+            <input id="title" @bind="_newTitle" @bind:event="oninput" />
+        </div>
+        <div class="form-row">
+            <label for="template">Modèle</label>
+            <select id="template" @bind="_template">
+                <option value="menu">Menu d'histoires</option>
+                <option value="single">Une seule histoire</option>
+            </select>
+        </div>
+        @if (_template == "menu")
+        {
+            <div class="form-row">
+                <label for="count">Nombre d'histoires</label>
+                <input id="count" type="number" min="1" max="20" @bind="_storyCount" />
+            </div>
+        }
+        <div class="actions">
+            <button class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(_newTitle)" @onclick="CreateAsync">Créer et éditer</button>
+            <button class="btn" @onclick="() => _showNew = false">Annuler</button>
+        </div>
+    </div>
+}
+
+@if (_entries is null)
+{
+    <p class="muted">Chargement…</p>
+}
+else if (_entries.Count == 0)
+{
+    <div class="empty card">
+        <p>Votre bibliothèque est vide.</p>
+        <p class="muted">Créez un pack à partir d'un modèle, ou importez une archive STUdio / Moiki (.zip).</p>
+    </div>
+}
+else
+{
+    <div class="grid">
+        @foreach (var entry in _entries)
+        {
+            <article class="pack-card" @key="entry.Id">
+                <div class="thumb">
+                    @if (entry.Thumbnail is { Kind: MediaKind.Image } thumb)
+                    {
+                        <img src="@thumb.ToDataUrl()" alt="" loading="lazy" />
+                    }
+                    else
+                    {
+                        <span aria-hidden="true">◐</span>
+                    }
+                </div>
+                <div class="pack-body">
+                    <h2 title="@entry.Title">@entry.Title</h2>
+                    <p class="muted">@entry.StageCount étapes · @Size(entry.SizeBytes)</p>
+                    <div class="actions">
+                        <a class="btn btn-small btn-primary" href="edit/@entry.Id">Éditer</a>
+                        <a class="btn btn-small" href="simulate/@entry.Id">▶ Simuler</a>
+                        <button class="btn btn-small" @onclick="() => ExportAsync(entry)">Exporter</button>
+                        @if (Device.IsSupported)
+                        {
+                            <a class="btn btn-small" href="device?install=@entry.Id">Envoyer</a>
+                        }
+                        @if (_confirmDelete == entry.Id)
+                        {
+                            <button class="btn btn-small btn-danger" @onclick="() => DeleteAsync(entry)">Confirmer</button>
+                            <button class="btn btn-small" @onclick="() => _confirmDelete = null">Annuler</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-small btn-danger" @onclick="() => _confirmDelete = entry.Id">Supprimer</button>
+                        }
+                    </div>
+                </div>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<LibraryEntry>? _entries;
+    private string? _message;
+    private bool _error;
+    private bool _showNew;
+    private string _newTitle = "Mes histoires";
+    private string _template = "menu";
+    private int _storyCount = 3;
+    private Guid? _confirmDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Library.Changed += OnLibraryChanged;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync() => _entries = await Library.ListAsync();
+
+    private void OnLibraryChanged(object? sender, EventArgs e) => _ = InvokeAsync(async () =>
+    {
+        await ReloadAsync();
+        StateHasChanged();
+    });
+
+    private async Task CreateAsync()
+    {
+        var pack = _template == "menu"
+            ? PackTemplates.StoryMenu(_newTitle.Trim(), Math.Clamp(_storyCount, 1, 20))
+            : PackTemplates.SingleStory(_newTitle.Trim());
+        await Library.SaveAsync(pack);
+        Nav.NavigateTo($"edit/{pack.Id}");
+    }
+
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        var imported = new List<string>();
+        try
+        {
+            foreach (var file in e.GetMultipleFiles(20))
+            {
+                await using var stream = file.OpenReadStream(maxAllowedSize: 1024L * 1024 * 1024);
+                var pack = await Library.ImportAsync(stream);
+                imported.Add(pack.Title);
+            }
+            Show($"Importé : {string.Join(", ", imported)}.");
+        }
+        catch (InvalidDataException ex)
+        {
+            Show($"Import impossible : {ex.Message}", error: true);
+        }
+        await ReloadAsync();
+    }
+
+    private async Task ExportAsync(LibraryEntry entry)
+    {
+        var data = await Library.ExportAsync(entry.Id);
+        var where = await Files.SaveAsync(SafeName(entry.Title) + ".zip", "application/zip", data);
+        Show(where);
+    }
+
+    private async Task DeleteAsync(LibraryEntry entry)
+    {
+        _confirmDelete = null;
+        await Library.DeleteAsync(entry.Id);
+        Show($"« {entry.Title} » supprimé.");
+    }
+
+    private void Show(string message, bool error = false)
+    {
+        _message = message;
+        _error = error;
+    }
+
+    internal static string Size(long bytes) => bytes < 1024 * 1024
+        ? $"{bytes / 1024d:0} Ko"
+        : $"{bytes / 1024d / 1024d:0.0} Mo";
+
+    internal static string SafeName(string title) =>
+        string.Concat(title.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim() is { Length: > 0 } s ? s : "pack";
+
+    public void Dispose() => Library.Changed -= OnLibraryChanged;
+}

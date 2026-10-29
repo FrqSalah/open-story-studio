@@ -1,0 +1,24 @@
+@page "/about"
+@inject IDeviceService Device
+
+<PageTitle>À propos — Open Story Studio</PageTitle>
+
+<h1>À propos</h1>
+<div class="card prose">
+    <p>
+        <strong>Open Story Studio</strong> permet de créer, simuler et transférer vos propres packs d'histoires
+        vers les conteuses compatibles (firmwares v1, v2 et v3).
+    </p>
+    <p>
+        Il s'appuie sur les travaux de rétro-ingénierie du projet
+        <a href="https://github.com/marian-m12l/studio" target="_blank" rel="noopener">STUdio</a> (MPL-2.0),
+        dans un objectif d'interopérabilité uniquement : aucun contenu protégé n'est distribué ni déchiffré.
+        Ce projet n'est affilié à aucun fabricant.
+    </p>
+    <p class="warning-text">
+        Utilisation à vos risques : une écriture interrompue peut rendre l'appareil inutilisable jusqu'à sa
+        réinitialisation. L'application sauvegarde l'index de l'appareil avant chaque modification.
+    </p>
+    <h2>Cette édition</h2>
+    <p>@(Device.IsSupported ? "Application avec accès à l'appareil." : Device.ConnectHint)</p>
+</div>

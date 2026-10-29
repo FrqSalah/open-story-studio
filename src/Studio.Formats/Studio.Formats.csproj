@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(StudioTargetFramework)</TargetFramework>
+    <Description>Readers and writers for story pack formats (STUdio archive, device FS v2/v3, raw v1) and device ciphers.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Studio.Core\Studio.Core.csproj" />
+    <InternalsVisibleTo Include="Studio.Tests" />
+  </ItemGroup>
+</Project>

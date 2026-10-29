@@ -1,0 +1,206 @@
+@* Interactive SVG view of the pack graph: drag nodes, pan the background, zoom with the wheel or buttons. *@
+@inject StudioJs Js
+
+<div class="graph-toolbar">
+    <button class="btn btn-small" title="Zoom avant" @onclick="() => Zoom(0.8)">+</button>
+    <button class="btn btn-small" title="Zoom arrière" @onclick="() => Zoom(1.25)">−</button>
+    <button class="btn btn-small" title="Tout afficher" @onclick="Fit">Ajuster</button>
+    <span class="legend"><span class="edge-ok"></span> OK / fin du son <span class="edge-home"></span> Accueil <span class="edge-option"></span> options du choix</span>
+</div>
+
+<svg id="@_svgId" class="graph" viewBox="@ViewBox"
+     @onpointerdown="OnBackgroundDown" @onpointermove="OnMove" @onpointerup="OnUp" @onpointerleave="OnUp"
+     @onwheel="OnWheel" @onwheel:preventDefault="true">
+    <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head" />
+        </marker>
+    </defs>
+
+    @if (Pack is not null)
+    {
+        @foreach (var stage in Pack.StageNodes)
+        {
+            @if (stage.OkTransition is { } ok && Pack.ActionNodes.Contains(ok.Action))
+            {
+                <path class="edge edge-ok" d="@Curve(Right(stage), Left(ok.Action))" marker-end="url(#arrow)" />
+            }
+            @if (stage.HomeTransition is { } home && Pack.ActionNodes.Contains(home.Action))
+            {
+                <path class="edge edge-home" d="@Curve(Bottom(stage), Left(home.Action))" marker-end="url(#arrow)" />
+            }
+        }
+        @foreach (var action in Pack.ActionNodes)
+        {
+            @for (var i = 0; i < action.Options.Count; i++)
+            {
+                var option = action.Options[i];
+                <path class="edge edge-option" d="@Curve(Right(action), Left(option))" marker-end="url(#arrow)" />
+            }
+        }
+
+        @foreach (var action in Pack.ActionNodes)
+        {
+            var p = Pos(action);
+            <g class="node node-action @(Session.SelectedAction == action ? "selected" : "")" transform="translate(@F(p.X),@F(p.Y))"
+               @onpointerdown="e => OnNodeDown(e, action)" @onpointerdown:stopPropagation="true">
+                <rect width="@ActionW" height="@ActionH" rx="22" />
+                <text x="@(ActionW / 2)" y="19" text-anchor="middle" class="node-title">@Trim(action.Name, 18)</text>
+                <text x="@(ActionW / 2)" y="35" text-anchor="middle" class="node-sub">@action.Options.Count option(s)</text>
+            </g>
+        }
+
+        @foreach (var stage in Pack.StageNodes)
+        {
+            var p = Pos(stage);
+            var isCover = stage == Pack.SquareOne;
+            var hasIssue = Session.Issues.Any(i => i.NodeId == stage.Id.ToString() && i.Severity == IssueSeverity.Error);
+            <g class="node node-stage @(Session.SelectedStage == stage ? "selected" : "") @(isCover ? "cover" : "") @(hasIssue ? "has-error" : "")"
+               transform="translate(@F(p.X),@F(p.Y))"
+               @onpointerdown="e => OnNodeDown(e, stage)" @onpointerdown:stopPropagation="true">
+                <rect width="@StageW" height="@StageH" rx="8" />
+                @if (stage.Image is { Kind: MediaKind.Image } img)
+                {
+                    <image href="@img.ToDataUrl()" x="6" y="6" width="68" height="51" preserveAspectRatio="xMidYMid slice" />
+                }
+                else
+                {
+                    <rect class="no-image" x="6" y="6" width="68" height="51" rx="4" />
+                }
+                <text x="82" y="22" class="node-title">@(isCover ? "★ " : "")@Trim(stage.Name, 14)</text>
+                <text x="82" y="40" class="node-sub">@(stage.Audio is null ? "sans son" : "♪ son") @(stage.Controls.Autoplay ? "· auto" : "")</text>
+                <text x="82" y="55" class="node-sub">@Controls(stage.Controls)</text>
+            </g>
+        }
+    }
+</svg>
+
+@code {
+    private const double StageW = 190, StageH = 63, ActionW = 150, ActionH = 44;
+    private readonly string _svgId = "graph-" + Guid.NewGuid().ToString("N");
+    private double _vx = -40, _vy = -40, _vw = 1400, _vh = 800;
+    private object? _dragNode;
+    private (double X, double Y) _dragOffset;
+    private (double X, double Y)? _panStart;
+    private bool _moved;
+
+    /// <summary>Pack displayed.</summary>
+    [Parameter, EditorRequired] public StoryPack? Pack { get; set; }
+
+    /// <summary>Editing session (selection, undo).</summary>
+    [Parameter, EditorRequired] public EditorSession Session { get; set; } = default!;
+
+    private string ViewBox => FormattableString.Invariant($"{_vx:0.#} {_vy:0.#} {_vw:0.#} {_vh:0.#}");
+
+    protected override void OnParametersSet()
+    {
+        if (Pack is not null && _first)
+        {
+            _first = false;
+            Fit();
+        }
+    }
+
+    private bool _first = true;
+
+    private void Fit()
+    {
+        if (Pack is null) return;
+        var points = Pack.StageNodes.Select(s => Pos(s)).Concat(Pack.ActionNodes.Select(a => Pos(a))).ToList();
+        if (points.Count == 0) return;
+        var minX = points.Min(p => p.X) - 40;
+        var minY = points.Min(p => p.Y) - 40;
+        var maxX = points.Max(p => p.X) + StageW + 40;
+        var maxY = points.Max(p => p.Y) + StageH + 40;
+        (_vx, _vy, _vw, _vh) = (minX, minY, Math.Max(600, maxX - minX), Math.Max(360, maxY - minY));
+    }
+
+    private void Zoom(double factor)
+    {
+        var cx = _vx + _vw / 2;
+        var cy = _vy + _vh / 2;
+        _vw = Math.Clamp(_vw * factor, 200, 20000);
+        _vh = Math.Clamp(_vh * factor, 120, 12000);
+        _vx = cx - _vw / 2;
+        _vy = cy - _vh / 2;
+    }
+
+    private void OnWheel(WheelEventArgs e) => Zoom(e.DeltaY > 0 ? 1.1 : 0.9);
+
+    private async Task OnNodeDown(PointerEventArgs e, object node)
+    {
+        var (x, y) = await ToSvg(e);
+        var p = node is StageNode s ? Pos(s) : Pos((ActionNode)node);
+        _dragNode = node;
+        _dragOffset = (x - p.X, y - p.Y);
+        _moved = false;
+        if (node is StageNode stage) Session.Select(stage);
+        else Session.Select((ActionNode)node);
+    }
+
+    private async Task OnBackgroundDown(PointerEventArgs e)
+    {
+        _panStart = await ToSvg(e);
+        _moved = false;
+    }
+
+    private async Task OnMove(PointerEventArgs e)
+    {
+        if (_dragNode is null && _panStart is null) return;
+        if (e.Buttons == 0)
+        {
+            OnUp();
+            return;
+        }
+        var (x, y) = await ToSvg(e);
+        if (_dragNode is not null)
+        {
+            if (!_moved) Session.BeginDrag();
+            _moved = true;
+            var position = new NodePosition((int)Math.Round((x - _dragOffset.X) / 10) * 10, (int)Math.Round((y - _dragOffset.Y) / 10) * 10);
+            if (_dragNode is StageNode s) s.Position = position;
+            else ((ActionNode)_dragNode).Position = position;
+        }
+        else if (_panStart is { } start)
+        {
+            _moved = true;
+            _vx -= x - start.X;
+            _vy -= y - start.Y;
+        }
+    }
+
+    private void OnUp()
+    {
+        if (_dragNode is not null && _moved) Session.EndDrag();
+        if (_panStart is not null && !_moved) Session.ClearSelection();
+        _dragNode = null;
+        _panStart = null;
+    }
+
+    private async Task<(double X, double Y)> ToSvg(PointerEventArgs e)
+    {
+        var p = await Js.ToSvgPointAsync(_svgId, e.ClientX, e.ClientY);
+        return (p[0], p[1]);
+    }
+
+    private static (double X, double Y) Pos(StageNode s) => (s.Position?.X ?? 0, s.Position?.Y ?? 0);
+    private static (double X, double Y) Pos(ActionNode a) => (a.Position?.X ?? 0, a.Position?.Y ?? 0);
+    private static (double X, double Y) Right(StageNode s) => (Pos(s).X + StageW, Pos(s).Y + StageH / 2);
+    private static (double X, double Y) Bottom(StageNode s) => (Pos(s).X + StageW / 2, Pos(s).Y + StageH);
+    private static (double X, double Y) Left(StageNode s) => (Pos(s).X, Pos(s).Y + StageH / 2);
+    private static (double X, double Y) Right(ActionNode a) => (Pos(a).X + ActionW, Pos(a).Y + ActionH / 2);
+    private static (double X, double Y) Left(ActionNode a) => (Pos(a).X, Pos(a).Y + ActionH / 2);
+
+    private static string Curve((double X, double Y) from, (double X, double Y) to)
+    {
+        var dx = Math.Max(40, Math.Abs(to.X - from.X) / 2);
+        return FormattableString.Invariant($"M {from.X:0.#} {from.Y:0.#} C {from.X + dx:0.#} {from.Y:0.#}, {to.X - dx:0.#} {to.Y:0.#}, {to.X:0.#} {to.Y:0.#}");
+    }
+
+    private static string F(double v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+
+    private static string Trim(string text, int max) => text.Length <= max ? text : text[..(max - 1)] + "…";
+
+    private static string Controls(ControlSettings c) =>
+        string.Join(" ", new[] { c.Wheel ? "molette" : null, c.Ok ? "OK" : null, c.Pause ? "pause" : null }.OfType<string>());
+}
