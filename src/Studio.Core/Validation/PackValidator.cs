@@ -124,10 +124,9 @@ public static class PackValidator
         while (queue.TryDequeue(out var stage))
         {
             if (!seen.Add(stage)) continue;
-            foreach (var t in new[] { stage.OkTransition, stage.HomeTransition })
+            foreach (var option in new[] { stage.OkTransition, stage.HomeTransition }.OfType<Transition>().SelectMany(t => t.Action.Options))
             {
-                if (t is null) continue;
-                foreach (var option in t.Action.Options) queue.Enqueue(option);
+                queue.Enqueue(option);
             }
         }
         return pack.StageNodes.Where(s => !seen.Contains(s)).ToList();

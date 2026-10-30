@@ -30,24 +30,22 @@ public static class RawPackFormat
         var next = pack.StageNodes.Count;
         foreach (var stage in pack.StageNodes)
         {
-            foreach (var t in new[] { stage.OkTransition, stage.HomeTransition })
+            foreach (var action in new[] { stage.OkTransition, stage.HomeTransition }.OfType<Transition>().Select(t => t.Action))
             {
-                if (t is not null && !actionSectors.ContainsKey(t.Action)) actionSectors[t.Action] = next++;
+                if (!actionSectors.ContainsKey(action)) actionSectors[action] = next++;
             }
         }
 
         var assetSectors = new Dictionary<string, (int Offset, int Size, byte[] Data)>(StringComparer.Ordinal);
-        foreach (var image in pack.StageNodes.Select(s => s.Image).OfType<MediaAsset>())
+        foreach (var image in pack.StageNodes.Select(s => s.Image).OfType<MediaAsset>().DistinctBy(a => a.Hash))
         {
-            if (assetSectors.ContainsKey(image.Hash)) continue;
             var info = AssetInspector.ReadBmpInfo(image.Data);
             if (info is not { Width: AssetInspector.ScreenWidth, Height: AssetInspector.ScreenHeight })
                 throw new InvalidDataException("Les images des appareils v1 doivent être des BMP 320x240.");
             next = Add(image, next);
         }
-        foreach (var audio in pack.StageNodes.Select(s => s.Audio).OfType<MediaAsset>())
+        foreach (var audio in pack.StageNodes.Select(s => s.Audio).OfType<MediaAsset>().DistinctBy(a => a.Hash).Where(a => !assetSectors.ContainsKey(a.Hash)))
         {
-            if (assetSectors.ContainsKey(audio.Hash)) continue;
             if (CheckWave(audio.Data) is { } problem) throw new InvalidDataException(problem);
             next = Add(audio, next);
         }

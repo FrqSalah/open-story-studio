@@ -18,7 +18,7 @@ public sealed class DeviceManagerOptions
     public bool AllowExperimentalWrites { get; set; }
 
     /// <summary>Folder where index backups are kept (one sub folder per device).</summary>
-    public string BackupFolder { get; set; } = Path.Combine(
+    public string BackupFolder { get; set; } = Path.Join(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenStoryStudio", "backups");
 }
 
@@ -102,20 +102,20 @@ public sealed partial class DeviceManager(DeviceAssetPreparer preparer, DeviceMa
         ArgumentNullException.ThrowIfNull(device);
         var info = await device.GetInfoAsync(cancellationToken).ConfigureAwait(false);
         var snapshot = await device.SnapshotIndexAsync(cancellationToken).ConfigureAwait(false);
-        var folder = Path.Combine(options.BackupFolder, Sanitize(info.SerialNumber ?? "inconnu"), DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff", System.Globalization.CultureInfo.InvariantCulture));
+        var folder = Path.Join(options.BackupFolder, Sanitize(info.SerialNumber ?? "inconnu"), DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff", System.Globalization.CultureInfo.InvariantCulture));
         Directory.CreateDirectory(folder);
         foreach (var (name, data) in snapshot)
         {
-            await File.WriteAllBytesAsync(Path.Combine(folder, Sanitize(name)), data, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(Path.Join(folder, Sanitize(name)), data, cancellationToken).ConfigureAwait(false);
         }
-        await File.WriteAllTextAsync(Path.Combine(folder, "device.json"), JsonSerializer.Serialize(info), cancellationToken).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Join(folder, "device.json"), JsonSerializer.Serialize(info), cancellationToken).ConfigureAwait(false);
         return folder;
     }
 
     /// <summary>Lists the backups of a device, most recent first.</summary>
     public IReadOnlyList<string> ListBackups(string? serialNumber)
     {
-        var folder = Path.Combine(options.BackupFolder, Sanitize(serialNumber ?? "inconnu"));
+        var folder = Path.Join(options.BackupFolder, Sanitize(serialNumber ?? "inconnu"));
         return Directory.Exists(folder) ? Directory.GetDirectories(folder).OrderDescending(StringComparer.Ordinal).ToList() : [];
     }
 

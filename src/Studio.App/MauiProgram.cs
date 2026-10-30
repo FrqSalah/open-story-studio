@@ -21,12 +21,12 @@ public static class MauiProgram
         builder.Services.AddMauiBlazorWebView();
 
         // Library and backups live in the app data folder (shared with the CLI on Windows).
-        var library = OperatingSystem.IsWindows() ? FolderPackLibrary.DefaultFolder : Path.Combine(FileSystem.AppDataDirectory, "library");
+        var library = OperatingSystem.IsWindows() ? FolderPackLibrary.DefaultFolder : Path.Join(FileSystem.AppDataDirectory, "library");
         var options = new DeviceManagerOptions
         {
             AllowExperimentalWrites = Preferences.Default.Get(nameof(IDeviceService.AllowExperimentalWrites), false),
         };
-        if (!OperatingSystem.IsWindows()) options.BackupFolder = Path.Combine(FileSystem.AppDataDirectory, "backups");
+        if (!OperatingSystem.IsWindows()) options.BackupFolder = Path.Join(FileSystem.AppDataDirectory, "backups");
 
         builder.Services.AddSingleton<IPackLibrary>(new FolderPackLibrary(library));
         builder.Services.AddSingleton<IFileSaver, ShareFileSaver>();

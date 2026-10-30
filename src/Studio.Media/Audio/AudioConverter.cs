@@ -79,15 +79,11 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
         var exe = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
         if (Environment.GetEnvironmentVariable("STUDIO_FFMPEG") is { Length: > 0 } env && File.Exists(env)) return env;
 
-        var local = Path.Combine(AppContext.BaseDirectory, exe);
+        var local = Path.Join(AppContext.BaseDirectory, exe);
         if (File.Exists(local)) return local;
 
-        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            var candidate = Path.Combine(dir.Trim('"'), exe);
-            if (File.Exists(candidate)) return candidate;
-        }
-        return null;
+        var directories = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+        return directories.Select(dir => Path.Join(dir.Trim('"'), exe)).FirstOrDefault(File.Exists);
     }
 
     /// <inheritdoc />
@@ -125,8 +121,8 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var a in (string[])["-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-vn", "-map_metadata", "-1"]) psi.ArgumentList.Add(a);
-        foreach (var a in outputArgs) psi.ArgumentList.Add(a);
+        string[] inputArgs = ["-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-vn", "-map_metadata", "-1"];
+        foreach (var a in inputArgs.Concat(outputArgs)) psi.ArgumentList.Add(a);
         psi.ArgumentList.Add("pipe:1");
 
         Process process;

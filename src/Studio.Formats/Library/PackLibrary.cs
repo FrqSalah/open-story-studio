@@ -142,7 +142,7 @@ public sealed class FolderPackLibrary : PackLibraryBase
     }
 
     /// <summary>Default location: <c>%LOCALAPPDATA%/OpenStoryStudio/library</c>.</summary>
-    public static string DefaultFolder => Path.Combine(
+    public static string DefaultFolder => Path.Join(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenStoryStudio", "library");
 
     /// <inheritdoc />
@@ -180,7 +180,7 @@ public sealed class FolderPackLibrary : PackLibraryBase
         return Task.CompletedTask;
     }
 
-    private string PathOf(Guid id) => Path.Combine(_folder, id.ToString("D") + ".zip");
+    private string PathOf(Guid id) => Path.Join(_folder, id.ToString("D") + ".zip");
 }
 
 /// <summary>In-memory library (browser edition and tests).</summary>

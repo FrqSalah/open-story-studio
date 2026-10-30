@@ -27,7 +27,7 @@ public sealed class WindowsDevicePicker : IDevicePicker
 
     /// <inheritdoc />
     public IDeviceStorage? Restore() =>
-        Preferences.Default.Get<string?>(LastFolderKey, null) is { } path && File.Exists(Path.Combine(path, ".md"))
+        Preferences.Default.Get<string?>(LastFolderKey, null) is { } path && File.Exists(Path.Join(path, ".md"))
             ? new LocalDeviceStorage(path)
             : null;
 }

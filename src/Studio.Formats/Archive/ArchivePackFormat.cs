@@ -128,9 +128,8 @@ public static class ArchivePackFormat
 
         var assets = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         byte[]? thumbnail = null;
-        foreach (var entry in zip.Entries)
+        foreach (var entry in zip.Entries.Where(e => !e.FullName.EndsWith('/')))
         {
-            if (entry.FullName.EndsWith('/')) continue;
             if (entry.FullName.StartsWith(AssetsPrefix, StringComparison.Ordinal))
             {
                 assets[entry.FullName[AssetsPrefix.Length..]] = ReadAll(entry);
@@ -152,9 +151,8 @@ public static class ArchivePackFormat
         };
 
         var actions = new Dictionary<string, ActionNode>(StringComparer.Ordinal);
-        foreach (var node in root["actionNodes"]?.AsArray() ?? [])
+        foreach (var a in (root["actionNodes"]?.AsArray() ?? []).OfType<JsonObject>())
         {
-            if (node is not JsonObject a) continue;
             var action = new ActionNode(Str(a, "id") ?? throw new InvalidDataException("Choix sans identifiant."))
             {
                 Name = Str(a, "name") ?? "Choix",
@@ -169,9 +167,8 @@ public static class ArchivePackFormat
         var assetCache = new Dictionary<string, MediaAsset>(StringComparer.Ordinal);
         var stages = new Dictionary<string, StageNode>(StringComparer.OrdinalIgnoreCase);
         StageNode? squareOne = null;
-        foreach (var node in root["stageNodes"]?.AsArray() ?? [])
+        foreach (var s in (root["stageNodes"]?.AsArray() ?? []).OfType<JsonObject>())
         {
-            if (node is not JsonObject s) continue;
             var id = Str(s, "uuid") ?? throw new InvalidDataException("Étape sans identifiant.");
             var controls = s["controlSettings"] as JsonObject;
             var stage = new StageNode(Guid.Parse(id))
@@ -193,15 +190,11 @@ public static class ArchivePackFormat
             pack.StageNodes.Add(stage);
         }
 
-        foreach (var node in root["actionNodes"]?.AsArray() ?? [])
+        foreach (var a in (root["actionNodes"]?.AsArray() ?? []).OfType<JsonObject>())
         {
-            if (node is not JsonObject a) continue;
             var action = actions[Str(a, "id")!];
-            foreach (var option in a["options"]?.AsArray() ?? [])
-            {
-                var optionId = option?.GetValue<string>();
-                if (optionId is not null && stages.TryGetValue(optionId, out var target)) action.Options.Add(target);
-            }
+            var optionIds = (a["options"]?.AsArray() ?? []).Select(o => o?.GetValue<string>()).OfType<string>();
+            action.Options.AddRange(optionIds.Where(stages.ContainsKey).Select(id => stages[id]));
         }
 
         if (squareOne is not null) pack.SetSquareOne(squareOne);

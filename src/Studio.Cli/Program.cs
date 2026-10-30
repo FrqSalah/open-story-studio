@@ -159,16 +159,16 @@ convert.SetAction(async (parse, ct) =>
     output.Create();
     if (raw)
     {
-        var path = Path.Combine(output.FullName, $"{pack.Id}.pack");
+        var path = Path.Join(output.FullName, $"{pack.Id}.pack");
         await File.WriteAllBytesAsync(path, RawPackFormat.Write(ready), ct);
         Console.WriteLine($"Image v1 écrite : {path}");
     }
     else
     {
-        var folder = Path.Combine(output.FullName, PackIndex.FolderName(pack.Id));
+        var folder = Path.Join(output.FullName, PackIndex.FolderName(pack.Id));
         foreach (var (file, data) in FsPackFormat.Write(ready))
         {
-            var target = Path.Combine(folder, file.Replace('/', Path.DirectorySeparatorChar));
+            var target = Path.Join(folder, file.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             await File.WriteAllBytesAsync(target, data, ct);
         }

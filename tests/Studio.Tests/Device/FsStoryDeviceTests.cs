@@ -190,11 +190,11 @@ public class FsStoryDeviceTests
         var root = Directory.CreateTempSubdirectory("oss-device-");
         try
         {
-            await File.WriteAllBytesAsync(Path.Combine(root.FullName, DeviceMetadata.FileName), TestData.V2Metadata(), Ct);
+            await File.WriteAllBytesAsync(Path.Join(root.FullName, DeviceMetadata.FileName), TestData.V2Metadata(), Ct);
             var device = (await FsStoryDevice.TryOpenAsync(new LocalDeviceStorage(root.FullName), cancellationToken: Ct))!;
             var pack = TestData.DeviceReadyMenu(1);
             await device.InstallAsync(pack, cancellationToken: Ct);
-            Assert.True(File.Exists(Path.Combine(root.FullName, ".content", PackIndex.FolderName(pack.Id), "ni")));
+            Assert.True(File.Exists(Path.Join(root.FullName, ".content", PackIndex.FolderName(pack.Id), "ni")));
             Assert.Single(await device.ListPacksAsync(Ct));
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new LocalDeviceStorage(root.FullName).ReadAllBytesAsync("../outside", Ct));
         }

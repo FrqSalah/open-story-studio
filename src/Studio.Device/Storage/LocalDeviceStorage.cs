@@ -85,7 +85,7 @@ public sealed class LocalDeviceStorage(string root) : IDeviceStorage
 
     private string Full(string path)
     {
-        var full = Path.GetFullPath(Path.Combine(_root, path.Replace('/', Path.DirectorySeparatorChar)));
+        var full = Path.GetFullPath(Path.Join(_root, path.Replace('/', Path.DirectorySeparatorChar)));
         if (!full.StartsWith(_root, StringComparison.OrdinalIgnoreCase))
         {
             throw new UnauthorizedAccessException($"Chemin hors de l'appareil : {path}");

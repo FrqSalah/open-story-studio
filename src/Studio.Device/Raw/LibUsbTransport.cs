@@ -34,23 +34,27 @@ public sealed class LibUsbTransport : IUsbTransport
     public static LibUsbTransport? TryOpenV1()
     {
         UsbContext? context = null;
+        IUsbDevice? device = null;
         try
         {
             context = new UsbContext();
-            var device = context.List().FirstOrDefault(d => V1Ids.Contains((d.VendorId, d.ProductId)));
-            if (device is null || !device.TryOpen())
-            {
-                context.Dispose();
-                return null;
-            }
+            device = context.List().FirstOrDefault(d => V1Ids.Contains((d.VendorId, d.ProductId)));
+            if (device is null || !device.TryOpen()) return null;
             device.ClaimInterface(0);
-            return new LibUsbTransport(context, device);
+            var transport = new LibUsbTransport(context, device);
+            // Ownership moves to the transport.
+            (context, device) = (null, null);
+            return transport;
         }
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or UsbException)
         {
             // libusb is not installed: v1 devices are simply not detected.
-            context?.Dispose();
             return null;
+        }
+        finally
+        {
+            device?.Dispose();
+            context?.Dispose();
         }
     }
 

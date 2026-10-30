@@ -176,7 +176,7 @@ public class DeviceManagerTests
             Assert.Contains(TransferPhase.Converting, phases);
             Assert.Equal(TransferPhase.Done, phases[^1]);
             var backup = Assert.Single(manager.ListBackups("23023030000123"));
-            Assert.True(File.Exists(Path.Combine(backup, "dotmd")));
+            Assert.True(File.Exists(Path.Join(backup, "dotmd")));
 
             await manager.RestoreAsync(device, backup, Ct);
             Assert.Empty(await device.ListPacksAsync(Ct));
