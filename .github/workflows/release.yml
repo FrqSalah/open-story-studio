@@ -14,13 +14,13 @@ env:
 jobs:
   cli:
     name: CLI ${{ matrix.rid }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         rid: [win-x64, linux-x64, osx-arm64]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Publish
@@ -28,23 +28,23 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           dotnet publish src/Studio.Cli/Studio.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained -p:PublishSingleFile=true -p:Version="$VERSION" -o out
           (cd out && zip -r "../studio-cli-${{ matrix.rid }}.zip" .)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cli-${{ matrix.rid }}
           path: studio-cli-${{ matrix.rid }}.zip
 
   android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: microsoft
           java-version: '21'
@@ -62,16 +62,16 @@ jobs:
           fi
           dotnet publish src/Studio.App/Studio.App.csproj -f net10.0-android -c Release -p:AndroidSdkDirectory="$ANDROID_HOME" -p:Version="$VERSION" -p:ApplicationVersion=${{ github.run_number }} $SIGNING -o out
           cp out/*-Signed.apk "open-story-studio-$VERSION.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: open-story-studio-*.apk
 
   windows:
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - run: dotnet workload install maui-windows
@@ -81,17 +81,17 @@ jobs:
           $version = "$env:GITHUB_REF_NAME".TrimStart('v')
           dotnet publish src/Studio.App/Studio.App.csproj -f net10.0-windows10.0.19041.0 -c Release -p:RuntimeIdentifierOverride=win-x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true -p:WindowsPackageType=None -p:Version=$version -o out
           Compress-Archive -Path out/* -DestinationPath "open-story-studio-windows-x64-$version.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: open-story-studio-windows-x64-*.zip
 
   publish:
     needs: [cli, android, windows]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
