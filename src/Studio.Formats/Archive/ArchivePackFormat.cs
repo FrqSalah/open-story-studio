@@ -151,15 +151,16 @@ public static class ArchivePackFormat
         };
 
         var actions = new Dictionary<string, ActionNode>(StringComparer.Ordinal);
-        foreach (var a in (root["actionNodes"]?.AsArray() ?? []).OfType<JsonObject>())
-        {
-            var action = new ActionNode(Str(a, "id") ?? throw new InvalidDataException("Choix sans identifiant."))
+        var actionNodes = (root["actionNodes"]?.AsArray() ?? []).OfType<JsonObject>().Select(a =>
+            new ActionNode(Str(a, "id") ?? throw new InvalidDataException("Choix sans identifiant."))
             {
                 Name = Str(a, "name") ?? "Choix",
                 Type = Str(a, "type"),
                 GroupId = Str(a, "groupId"),
                 Position = Position(a),
-            };
+            });
+        foreach (var action in actionNodes)
+        {
             actions[action.Id] = action;
             pack.ActionNodes.Add(action);
         }

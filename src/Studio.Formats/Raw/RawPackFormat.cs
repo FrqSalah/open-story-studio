@@ -30,9 +30,11 @@ public static class RawPackFormat
         var next = pack.StageNodes.Count;
         foreach (var stage in pack.StageNodes)
         {
-            foreach (var action in new[] { stage.OkTransition, stage.HomeTransition }.OfType<Transition>().Select(t => t.Action))
+            // Evaluated lazily: an action shared by OK and Home gets a single sector.
+            var actions = new[] { stage.OkTransition, stage.HomeTransition }.OfType<Transition>().Select(t => t.Action);
+            foreach (var action in actions.Where(a => !actionSectors.ContainsKey(a)))
             {
-                if (!actionSectors.ContainsKey(action)) actionSectors[action] = next++;
+                actionSectors[action] = next++;
             }
         }
 
