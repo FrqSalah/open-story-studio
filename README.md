@@ -153,16 +153,19 @@ Les sauvegardes d'index sont rangées dans `%LOCALAPPDATA%\OpenStoryStudio\backu
 | [`deploy-web.yml`](.github/workflows/deploy-web.yml) | push sur `main` | Publie la PWA et la déploie sur **Netlify** |
 | [`release.yml`](.github/workflows/release.yml) | tag `v*` | Release GitHub : APK, application Windows (zip), CLI Windows/Linux/macOS |
 
-### Configurer Netlify
+### Netlify
 
-La version web est statique : **aucun backend n'est nécessaire**.
+La version web est statique : **aucun backend n'est nécessaire**. Le projet Netlify
+[`open-story-studio`](https://app.netlify.com/projects/open-story-studio) publie sur
+**https://open-story-studio.netlify.app**. Deux façons de déployer (une seule suffit) :
 
-1. Sur Netlify : *Add new site → Deploy manually* (ou `npx netlify-cli sites:create`), puis notez le **Site ID**
-   (*Site configuration → Site details*).
-2. Créez un jeton personnel : *User settings → Applications → Personal access tokens*.
-3. Dans GitHub : *Settings → Secrets and variables → Actions*, ajoutez `NETLIFY_AUTH_TOKEN` et `NETLIFY_SITE_ID`.
-4. Relancez le workflow *Deploy web (Netlify)*. Sans ces secrets, le site est construit (artefact `web`) mais pas
-   déployé.
+- **Déploiement continu par Netlify (recommandé)** : dans Netlify, *Project configuration → Build & deploy →
+  Link repository*, choisissez `FrqSalah/open-story-studio` et la branche `main`. Le fichier
+  [`netlify.toml`](netlify.toml) installe le SDK .NET 10 et publie la PWA à chaque push, avec des
+  *Deploy Previews* sur les pull requests.
+- **Déploiement par GitHub Actions** : le secret `NETLIFY_SITE_ID` est déjà configuré ; ajoutez un jeton personnel
+  Netlify (*User settings → Applications → Personal access tokens*) dans le secret `NETLIFY_AUTH_TOKEN`.
+  Le workflow *Deploy web (Netlify)* déploiera alors à chaque push sur `main`.
 
 `_redirects` (routage de la SPA) et `_headers` (en-têtes de sécurité) sont fournis dans `src/Studio.Web/wwwroot`.
 

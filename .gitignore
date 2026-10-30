@@ -483,3 +483,4 @@ $RECYCLE.BIN/
 
 # Local tooling
 .claude/
+.netlify/
