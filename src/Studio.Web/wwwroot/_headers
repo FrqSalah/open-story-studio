@@ -6,3 +6,5 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: microphone=(self), camera=(), geolocation=()
+/manifest.webmanifest
+  Content-Type: application/manifest+json
